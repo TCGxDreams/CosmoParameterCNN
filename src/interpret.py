@@ -41,7 +41,57 @@ def predict(model, maps, norm, y_norm, device, batch=256):
     return np.concatenate(preds) * y_sd + y_mu
 
 
-def check_pk_conservation(maps_orig, maps_gauss, n_bins=20, outdir="figs"):
+LABELS = {
+    "vi": {
+        "orig_pk": "Bản gốc (Phi Gaussian thật)",
+        "gauss_pk": "Bản Gaussian hóa (Cùng P(k))",
+        "xlabel_pk": "k (chu kỳ/pixel)",
+        "title_pk": "Kiểm chứng: Bảo toàn phổ công suất P(k)",
+        "ensemble_lbl": "CNN Ensemble (3 hạt giống)",
+        "true_lbl": "thật",
+        "pred_lbl": "Dự đoán",
+        "orig_title": "Phi Gaussian thật",
+        "gauss_title": "Gaussian hóa (Cùng P(k))",
+        "orig_cnn": "CNN Gốc",
+        "gauss_cnn": "CNN Gaussian hóa",
+        "r2_lbl": "Hiệu năng $R^2$",
+        "title_r2": "So sánh hiệu năng $R^2$ với xáo pha Fourier",
+        "sal_om": "Độ nhạy $\Omega_m$",
+        "sal_s8": "Độ nhạy $\sigma_8$",
+        "xlabel_sal": "Phân vị mật độ pixel (%)",
+        "ylabel_sal": "Saliency trung bình (chuẩn hóa)",
+        "title_sal": "Độ nhạy (Saliency) theo phân vị mật độ pixel",
+        "mean_lbl": "Trung bình",
+        "xlabel_noise": "Biên độ nhiễu (theo độ lệch chuẩn dữ liệu)",
+        "title_noise": "Độ bền trước nhiễu (Trung bình qua 3 hạt giống)"
+    },
+    "en": {
+        "orig_pk": "Original (N-body)",
+        "gauss_pk": "Phase-randomized (same P(k))",
+        "xlabel_pk": "k (cycles/pixel)",
+        "title_pk": "Sanity Check: Power Spectrum P(k) Conservation",
+        "ensemble_lbl": "CNN Ensemble (3 seeds)",
+        "true_lbl": "True",
+        "pred_lbl": "Predicted",
+        "orig_title": "Original (N-body)",
+        "gauss_title": "Gaussianized (same P(k))",
+        "orig_cnn": "Original CNN",
+        "gauss_cnn": "Gaussianized CNN",
+        "r2_lbl": "$R^2$ Score",
+        "title_r2": "Performance Comparison ($R^2$ Score) with Fourier Phase Randomization",
+        "sal_om": "$\Omega_m$ Saliency",
+        "sal_s8": "$\sigma_8$ Saliency",
+        "xlabel_sal": "Pixel Density Percentile (%)",
+        "ylabel_sal": "Mean Saliency (normalized)",
+        "title_sal": "Saliency by Pixel Density Percentile",
+        "mean_lbl": "Mean",
+        "xlabel_noise": "Noise Amplitude (in units of field std)",
+        "title_noise": "Noise Robustness (Mean over 3 seeds)"
+    }
+}
+
+
+def check_pk_conservation(maps_orig, maps_gauss, n_bins=20, outdir="figs", lang="en"):
     """Sanity check: kiem tra P(k) cua ban Gaussian hoa va ban goc lech < 1e-5."""
     diffs = []
     pks_orig = []
@@ -74,29 +124,32 @@ def check_pk_conservation(maps_orig, maps_gauss, n_bins=20, outdir="figs"):
     
     # Save the verification plot
     plt.figure(figsize=(6, 4.5))
-    plt.loglog(k, mean_pk_orig, "b-", lw=1.5, label="Bản gốc (Log-normal)")
-    plt.loglog(k, mean_pk_gauss, "r--", lw=1.5, label="Bản Gaussian hóa (Cùng P(k))")
-    plt.xlabel("k (chu kỳ/pixel)")
+    plt.loglog(k, mean_pk_orig, "b-", lw=1.5, label=LABELS[lang]["orig_pk"])
+    plt.loglog(k, mean_pk_gauss, "r--", lw=1.5, label=LABELS[lang]["gauss_pk"])
+    plt.xlabel(LABELS[lang]["xlabel_pk"])
     plt.ylabel("P(k)")
     plt.legend()
-    plt.title("Kiểm chứng: Bảo toàn phổ công suất P(k)")
+    plt.title(LABELS[lang]["title_pk"])
     plt.tight_layout()
     plt.savefig(f"{outdir}/sanity_pk.png", dpi=150)
     plt.close()
 
 
-def fig_scatter(y, pred_ensemble, pred_base, names, outpath):
+def fig_scatter(y, pred_ensemble, pred_base, names, outpath, lang="en"):
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
     for j, ax in enumerate(axes):
         ax.scatter(y[:, j], pred_base[:, j], s=6, alpha=0.35,
                    label="Baseline P(k)", color="tab:orange")
         ax.scatter(y[:, j], pred_ensemble[:, j], s=6, alpha=0.35,
-                   label="CNN Ensemble (3 hạt giống)", color="tab:blue")
+                   label=LABELS[lang]["ensemble_lbl"], color="tab:blue")
         lims = [y[:, j].min(), y[:, j].max()]
         ax.plot(lims, lims, "k--", lw=1)
-        name_vn = r"$\Omega_m$" if names[j] == "Omega_m" else r"$\sigma_8$"
-        ax.set_xlabel(f"{name_vn} thật")
-        ax.set_ylabel("Dự đoán")
+        name_en = r"$\Omega_m$" if names[j] == "Omega_m" else r"$\sigma_8$"
+        if lang == "vi":
+            ax.set_xlabel(f"{name_en} {LABELS[lang]['true_lbl']}")
+        else:
+            ax.set_xlabel(f"{LABELS[lang]['true_lbl']} {name_en}")
+        ax.set_ylabel(LABELS[lang]["pred_lbl"])
         ax.legend()
     plt.tight_layout()
     plt.savefig(outpath, dpi=150)
@@ -242,6 +295,7 @@ def main():
     p.add_argument("--baseline_preds", type=str, default="baseline_preds.npz")
     p.add_argument("--split_path", type=str, default="split.npz")
     p.add_argument("--maps_per_sim", type=int, default=1)
+    p.add_argument("--lang", type=str, default="en", choices=["en", "vi"])
     args = p.parse_args()
 
     import os
@@ -283,20 +337,20 @@ def main():
               f" | Ensemble R2 sau Gaussian hoa = {gauss_res['ensemble_gauss_r2'][j]:.4f}")
 
     # 4. Sanity check: P(k) conservation
-    check_pk_conservation(maps[te][:100], maps_g[:100], outdir=args.outdir)
+    check_pk_conservation(maps[te][:100], maps_g[:100], outdir=args.outdir, lang=args.lang)
 
     # 5. Scatter Plot (Ensemble vs Baseline)
     fig_scatter(params[te], gauss_res["ensemble_orig_pred"], base["pred"], names,
-                f"{args.outdir}/scatter_true_pred.png")
+                f"{args.outdir}/scatter_true_pred.png", lang=args.lang)
     print(f"\nHinh scatter prediction ensemble duoc ghi vao {args.outdir}/scatter_true_pred.png")
 
     # Figure: Goc vs Gaussianized Map Example
     fig, axes = plt.subplots(1, 2, figsize=(9, 4))
     vmax = np.percentile(maps[te][0], 99)
     axes[0].imshow(maps[te][0], vmax=vmax)
-    axes[0].set_title("Bản gốc (Log-normal)")
+    axes[0].set_title(LABELS[args.lang]["orig_title"])
     axes[1].imshow(maps_g[0], vmax=vmax)
-    axes[1].set_title("Gaussian hóa (Cùng P(k))")
+    axes[1].set_title(LABELS[args.lang]["gauss_title"])
     for ax in axes: ax.axis("off")
     plt.tight_layout()
     plt.savefig(f"{args.outdir}/gaussianized_example.png", dpi=150)
@@ -306,14 +360,14 @@ def main():
     x = np.arange(len(names))
     w = 0.25
     plt.figure(figsize=(7, 4.5))
-    plt.bar(x - w, gauss_res["orig_r2_mean"], w, yerr=gauss_res["orig_r2_std"], capsize=5, label="CNN Gốc")
-    plt.bar(x, gauss_res["gauss_r2_mean"], w, yerr=gauss_res["gauss_r2_std"], capsize=5, label="CNN Gaussian hóa")
+    plt.bar(x - w, gauss_res["orig_r2_mean"], w, yerr=gauss_res["orig_r2_std"], capsize=5, label=LABELS[args.lang]["orig_cnn"])
+    plt.bar(x, gauss_res["gauss_r2_mean"], w, yerr=gauss_res["gauss_r2_std"], capsize=5, label=LABELS[args.lang]["gauss_cnn"])
     plt.bar(x + w, base["r2"], w, label="Baseline P(k)")
     tick_names = [r"$\Omega_m$" if n == "Omega_m" else r"$\sigma_8$" for n in names]
     plt.xticks(x, tick_names)
-    plt.ylabel(r"Hiệu năng $R^2$")
+    plt.ylabel(LABELS[args.lang]["r2_lbl"])
     plt.legend()
-    plt.title("So sánh hiệu năng $R^2$ với xáo pha Fourier")
+    plt.title(LABELS[args.lang]["title_r2"])
     plt.tight_layout()
     plt.savefig(f"{args.outdir}/gaussianization_r2.png", dpi=150)
     plt.close()
@@ -321,12 +375,12 @@ def main():
     # 6. Saliency Experiment (Separated parameters)
     sal_slope, sal_sigma = exp_saliency_by_density(models, norm, maps, te, device)
     plt.figure(figsize=(6.5, 4.5))
-    plt.plot(np.arange(5, 100, 10), sal_slope / sal_slope.max(), "o-", color="tab:blue", label=r"Độ nhạy $\Omega_m$")
-    plt.plot(np.arange(5, 100, 10), sal_sigma / sal_sigma.max(), "s-", color="tab:red", label=r"Độ nhạy $\sigma_8$")
-    plt.xlabel("Phân vị mật độ pixel (%)")
-    plt.ylabel("Saliency trung bình (chuẩn hóa)")
+    plt.plot(np.arange(5, 100, 10), sal_slope / sal_slope.max(), "o-", color="tab:blue", label=LABELS[args.lang]["sal_om"])
+    plt.plot(np.arange(5, 100, 10), sal_sigma / sal_sigma.max(), "s-", color="tab:red", label=LABELS[args.lang]["sal_s8"])
+    plt.xlabel(LABELS[args.lang]["xlabel_sal"])
+    plt.ylabel(LABELS[args.lang]["ylabel_sal"])
     plt.legend()
-    plt.title("Độ nhạy (Saliency) theo phân vị mật độ pixel")
+    plt.title(LABELS[args.lang]["title_sal"])
     plt.tight_layout()
     plt.savefig(f"{args.outdir}/saliency_by_density.png", dpi=150)
     plt.close()
@@ -343,13 +397,13 @@ def main():
         color = "tab:blue" if j == 0 else "tab:red"
         marker = "o" if j == 0 else "s"
         label_name = r"$\Omega_m$" if n == "Omega_m" else r"$\sigma_8$"
-        plt.plot(nls, r2_mean[:, j], marker + "-", color=color, label=f"Trung bình {label_name}")
+        plt.plot(nls, r2_mean[:, j], marker + "-", color=color, label=f"{LABELS[args.lang]['mean_lbl']} {label_name}")
         plt.fill_between(nls, r2_mean[:, j] - r2_std[:, j], r2_mean[:, j] + r2_std[:, j],
                          color=color, alpha=0.15)
-    plt.xlabel("Biên độ nhiễu (theo độ lệch chuẩn dữ liệu)")
-    plt.ylabel(r"Hiệu năng $R^2$")
+    plt.xlabel(LABELS[args.lang]["xlabel_noise"])
+    plt.ylabel(LABELS[args.lang]["r2_lbl"])
     plt.legend()
-    plt.title("Độ bền trước nhiễu (Trung bình qua 3 hạt giống)")
+    plt.title(LABELS[args.lang]["title_noise"])
     plt.tight_layout()
     plt.savefig(f"{args.outdir}/noise_robustness.png", dpi=150)
     plt.close()

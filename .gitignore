@@ -22,6 +22,8 @@ cmd_raw/
 data/
 figs_cmd/
 figs_cmd_gauss/
+figs_cmd_vi/
+figs_cmd_gauss_vi/
 *.npz
 *.pt
 *.npy
