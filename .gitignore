@@ -1,0 +1,28 @@
+# LaTeX Source and Output Files
+*.tex
+*.pdf
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.xdv
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# OS Files
+.DS_Store
+
+# Datasets and Large Files (Downloaded/Generated)
+cmd_raw/
+data/
+figs_cmd/
+figs_cmd_gauss/
+*.npz
+*.pt
+*.npy
+*.txt
